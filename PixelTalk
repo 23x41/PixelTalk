@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text to Pixels Translator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        #inputText {
+            width: 80%;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        #pixelContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .pixel {
+            width: 20px;
+            height: 20px;
+            margin: 1px;
+            display: inline-block;
+        }
+        #canvas {
+            display: none;
+        }
+        #imageInput {
+            margin-top: 20px;
+        }
+        #resultText {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Text to Pixels Translator</h1>
+    <input type="text" id="inputText" placeholder="Enter your text here">
+    <button onclick="generatePixels()">Generate Pixels</button>
+    <button onclick="saveImage()">Save as Image</button>
+    <input type="file" id="imageInput" accept="image/*" onchange="handleImageUpload()">
+    <div id="pixelContainer"></div>
+    <canvas id="canvas"></canvas>
+    <div id="resultText"></div>
+
+    <script>
+        function generatePixels() {
+            const input = document.getElementById('inputText').value.toUpperCase();
+            const pixelContainer = document.getElementById('pixelContainer');
+            pixelContainer.innerHTML = '';  // Clear previous pixels
+
+            for (const char of input) {
+                if (char >= 'A' && char <= 'Z') {
+                    const letterValue = char.charCodeAt(0) - 'A'.charCodeAt(0);
+                    const color = getRandomColorForLetter(letterValue);
+                    const pixel = document.createElement('div');
+                    pixel.className = 'pixel';
+                    pixel.style.backgroundColor = `rgb(${color.r}, ${color.g}, ${color.b})`;
+                    pixelContainer.appendChild(pixel);
+                }
+            }
+        }
+
+        function getRandomColorForLetter(letterValue) {
+            let r, g, b;
+            do {
+                r = Math.floor(Math.random() * 256);
+                g = Math.floor(Math.random() * 256);
+                b = Math.floor(Math.random() * 256);
+            } while ((r + g + b) % 26 !== letterValue);
+
+            return { r, g, b };
+        }
+
+        function saveImage() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const pixelContainer = document.getElementById('pixelContainer');
+            const pixelWidth = 20;
+            const pixelHeight = 20;
+            const numPixels = pixelContainer.children.length;
+
+            canvas.width = pixelWidth * Math.ceil(Math.sqrt(numPixels));
+            canvas.height = pixelHeight * Math.ceil(numPixels / Math.ceil(Math.sqrt(numPixels)));
+
+            pixelContainer.childNodes.forEach((pixel, index) => {
+                const x = (index % Math.ceil(Math.sqrt(numPixels))) * pixelWidth;
+                const y = Math.floor(index / Math.ceil(Math.sqrt(numPixels))) * pixelHeight;
+                const rgb = pixel.style.backgroundColor.match(/\d+/g);
+                ctx.fillStyle = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+                ctx.fillRect(x, y, pixelWidth, pixelHeight);
+            });
+
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            link.download = 'pixels.png';
+            link.click();
+        }
+
+        function handleImageUpload() {
+            const fileInput = document.getElementById('imageInput');
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.getElementById('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const blockSize = 20;
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                    const data = imageData.data;
+                    let resultText = '';
+
+                    for (let y = 0; y < img.height; y += blockSize) {
+                        for (let x = 0; x < img.width; x += blockSize) {
+                            const block = getBlock(data, img.width, x, y, blockSize);
+                            const averageColor = getAverageColor(block);
+                            const letterValue = getLetterFromColor(averageColor);
+                            const char = String.fromCharCode('A'.charCodeAt(0) + letterValue);
+                            resultText += char;
+                        }
+                    }
+
+                    document.getElementById('resultText').textContent = `Decoded Text: ${resultText}`;
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        }
+
+        function getBlock(data, imgWidth, startX, startY, blockSize) {
+            const block = [];
+            for (let y = 0; y < blockSize; y++) {
+                for (let x = 0; x < blockSize; x++) {
+                    const index = ((startY + y) * imgWidth + (startX + x)) * 4;
+                    if (index + 4 <= data.length) {
+                        block.push({
+                            r: data[index],
+                            g: data[index + 1],
+                            b: data[index + 2],
+                            a: data[index + 3]
+                        });
+                    }
+                }
+            }
+            return block;
+        }
+
+        function getAverageColor(block) {
+            let r = 0, g = 0, b = 0;
+            block.forEach(pixel => {
+                r += pixel.r;
+                g += pixel.g;
+                b += pixel.b;
+            });
+            const numPixels = block.length;
+            return {
+                r: Math.floor(r / numPixels),
+                g: Math.floor(g / numPixels),
+                b: Math.floor(b / numPixels)
+            };
+        }
+
+        function getLetterFromColor(color) {
+            const sum = color.r + color.g + color.b;
+            return sum % 26;
+        }
+    </script>
+</body>
+</html>
